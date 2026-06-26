@@ -93,16 +93,5 @@ python scripts/build_vector_db.py --rebuild
 ## Notebook 流程
 
 1. `data-exploration.ipynb`：加载原始图书元数据，清洗缺失值和字段。
-2. `text-classification.ipynb`：整理图书类别，生成简化类别标签。
-3. `sentiment-analysis.ipynb`：对图书描述进行情绪打分。
-4. `vector-search.ipynb`：构建语义检索语料，验证 Chroma 召回效果。
-
-## 求职展示建议
-
-- 在 README 顶部补一张运行截图，可以直接展示检索框、推荐封面和 AI 推荐理由。
-- 在 GitHub 仓库 About 区域添加 topics：`semantic-search`、`recommendation-system`、`gradio`、`langchain`、`chroma`。
-- 若部署到 Hugging Face Spaces 或云服务器，可在 README 顶部添加在线 Demo 链接。
-
-## License
-
-本项目代码使用 MIT License。数据文件请按其原始来源授权范围使用。
+2. `text-classification.ipynb`：整理图书类别，生成简化3. `sentiment-analysis.ipynb`：对图书描述进行情绪打分。
+4. `vector-search.ipynb`：构建语义检索语料，验证 Chroa 召回效果。
