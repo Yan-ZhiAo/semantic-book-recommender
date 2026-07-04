@@ -32,6 +32,8 @@ flowchart LR
     G --> F
 ```
 
+更完整的分层、数据流和可维护性说明见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
+
 ## 目录结构
 
 ```text
@@ -93,5 +95,6 @@ python scripts/build_vector_db.py --rebuild
 ## Notebook 流程
 
 1. `data-exploration.ipynb`：加载原始图书元数据，清洗缺失值和字段。
-2. `text-classification.ipynb`：整理图书类别，生成简化3. `sentiment-analysis.ipynb`：对图书描述进行情绪打分。
-4. `vector-search.ipynb`：构建语义检索语料，验证 Chroa 召回效果。
+2. `text-classification.ipynb`：整理图书类别，生成简化分类标签。
+3. `sentiment-analysis.ipynb`：对图书描述进行情绪打分。
+4. `vector-search.ipynb`：构建语义检索语料，验证 Chroma 召回效果。
