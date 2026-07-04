@@ -1,6 +1,6 @@
 # Architecture
 
-Semantic Book Recommender 是一个轻量级推荐系统项目，核心思路是先用语义向量召回候选图书，再用结构化字段和情绪分数做二次排序，最后通过 Gradio 提供交互式展示。仓库名已经准确表达了项目定位：`semantic-book-recommender` 比泛泛的 `book-system` 或 `recommendation-demo` 更适合展示语义检索能力。
+Semantic Book Recommender 是一个轻量级推荐系统项目，核心思路是先用语义向量召回候选图书，再用结构化字段和情绪分数做二次排序，最后通过 Gradio 提供交互式展示。
 
 ## 模块分层
 
@@ -16,7 +16,7 @@ Semantic Book Recommender 是一个轻量级推荐系统项目，核心思路是
 |-- requirements.txt              # Python 依赖
 ```
 
-当前结构适合个人作品集和课程项目：数据处理 Notebook 保留可追溯流程，运行入口保持简单，生成型资产 `chroma_db/` 和模型缓存通过 `.gitignore` 排除。
+数据处理 Notebook 保留可追溯流程，运行入口保持简单，生成型资产 `chroma_db/` 和模型缓存通过 `.gitignore` 排除。
 
 ## 运行时数据流
 
@@ -42,7 +42,7 @@ flowchart LR
 
 ## 数据资产策略
 
-仓库目前提交了处理后的 CSV 和检索语料，这是合理的：它让项目开箱即可复现推荐效果。相比之下，以下内容属于本地生成物，不建议提交：
+仓库提交了处理后的 CSV 和检索语料。以下内容属于本地生成物，并通过 `.gitignore` 排除：
 
 - `chroma_db/`：由脚本从文本语料重建。
 - `models/`：模型缓存体积大，适合放在 Hugging Face 缓存或本地目录。
@@ -50,9 +50,3 @@ flowchart LR
 - `.ipynb_checkpoints/`、日志、虚拟环境目录。
 
 这些规则已经在 `.gitignore` 中覆盖。
-
-## 可维护性建议
-
-- 保持 `app.py` 作为唯一启动入口，避免 README 中出现多个等价入口造成混乱。
-- 后续如果 UI 逻辑继续增大，可以把 `gradio-dashboard.py` 拆成 `recommender.py`、`llm.py` 和 `ui.py`，但目前单文件更便于展示。
-- 如果数据集继续扩展，建议新增 `data/processed/` 与 `data/raw/`，并把根目录 CSV 迁入 `data/processed/`。这会改变现有路径，适合在下一次功能迭代中单独做。

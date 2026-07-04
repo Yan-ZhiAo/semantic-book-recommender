@@ -8,7 +8,7 @@
 - 多维推荐：支持类别过滤，以及 Happy、Surprising、Angry、Suspenseful、Sad 等情绪基调排序。
 - LLM 解释：配置 `DEEPSEEK_API_KEY` 后，可为推荐结果生成中文推荐理由。
 - 可复现流程：保留数据清洗、分类、情感分析、向量检索 Notebook，并提供向量库重建脚本。
-- 展示友好：Gradio Web UI 支持封面画廊、点击查看详情，适合作为求职作品集项目。
+- 展示友好：Gradio Web UI 支持封面画廊和点击查看详情。
 
 ## 技术栈
 
