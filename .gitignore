@@ -20,5 +20,16 @@ models/
 *.log
 gradio-dashboard.*.log
 
+# Non-code deliverables
+*.doc
+*.docx
+*.pdf
+*.ppt
+*.pptx
+*报告*
+*论文*
+*开题*
+*答辩*
+
 .DS_Store
 Thumbs.db
