@@ -1,3 +1,16 @@
+---
+title: Semantic Book Recommender
+emoji: 📚
+colorFrom: blue
+colorTo: indigo
+sdk: gradio
+python_version: "3.11"
+app_file: app.py
+pinned: false
+preload_from_hub:
+  - BAAI/bge-small-en-v1.5
+---
+
 # Semantic Book Recommender
 
 基于语义向量检索、情感分析和 LLM 推荐语生成的智能图书推荐系统。用户输入一段阅读偏好，系统会从图书描述中做语义召回，再按类别和情绪基调筛选排序，最后通过 Gradio 展示推荐书单和图书详情。
@@ -77,6 +90,9 @@ A story about forgiveness and family secrets
 | `DEEPSEEK_API_KEY` | 否 | 配置后启用中文推荐理由生成；不配置也可以运行语义推荐。 |
 | `BOOK_EMBEDDING_MODEL_PATH` | 否 | 指向本地 `bge-small-en-v1.5` 模型目录，用于离线运行。 |
 | `HF_HOME` | 否 | 自定义 Hugging Face 模型缓存目录。 |
+| `BOOK_CHROMA_DB_PATH` | 否 | 自定义 Chroma 索引目录；Windows 下项目路径含中文时建议设置为纯英文路径。 |
+| `GRADIO_SERVER_NAME` | 否 | 指定监听地址；本地默认 `127.0.0.1`，局域网访问时设置为 `0.0.0.0`。 |
+| `GRADIO_SERVER_PORT` | 否 | 固定监听端口；不设置时 Gradio 自动选择可用端口。 |
 
 ## 数据与向量库
 
@@ -85,6 +101,8 @@ A story about forgiveness and family secrets
 ```bash
 python scripts/build_vector_db.py
 ```
+
+在 Windows 中，如果项目所在路径包含中文，程序会自动将索引保存到系统临时目录下的 ASCII 路径；需要固定位置时，请设置 `BOOK_CHROMA_DB_PATH`。
 
 如果需要重新生成索引：
 
