@@ -1,16 +1,3 @@
----
-title: Semantic Book Recommender
-emoji: 📚
-colorFrom: blue
-colorTo: indigo
-sdk: gradio
-python_version: "3.11"
-app_file: app.py
-pinned: false
-preload_from_hub:
-  - BAAI/bge-small-en-v1.5
----
-
 # Semantic Book Recommender
 
 基于语义向量检索、情感分析和 LLM 推荐语生成的智能图书推荐系统。用户输入一段阅读偏好，系统会从图书描述中做语义召回，再按类别和情绪基调筛选排序，最后通过 Gradio 展示推荐书单和图书详情。
