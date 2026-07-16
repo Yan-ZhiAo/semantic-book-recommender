@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: semantic-book-recommender
+    runtime: python
+    plan: free
+    region: singapore
+    buildCommand: pip install -r requirements.txt && python scripts/build_vector_db.py
+    startCommand: python app.py
+    autoDeployTrigger: commit
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: GRADIO_SERVER_NAME
+        value: 0.0.0.0
+      - key: HF_HOME
+        value: /opt/render/project/src/.cache/huggingface
+      - key: BOOK_CHROMA_DB_PATH
+        value: /opt/render/project/src/chroma_db
+      - key: DEEPSEEK_API_KEY
+        sync: false
