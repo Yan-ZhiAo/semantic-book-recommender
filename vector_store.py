@@ -7,14 +7,11 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from langchain_chroma import Chroma
-from langchain_core.embeddings import Embeddings
-from langchain_core.documents import Document
-
-
 MODEL_ID = "BAAI/bge-small-en-v1.5"
 VECTOR_DB_SCHEMA_VERSION = 4
 MANIFEST_NAME = "book_recommender_manifest.json"
+RENDER_INDEX_SCHEMA_VERSION = 1
+RENDER_INDEX_DIRECTORY = "render_vector_index"
 
 
 def get_embedding_model_config(project_root: Path) -> tuple[str, dict]:
@@ -45,16 +42,29 @@ def get_embedding_model_config(project_root: Path) -> tuple[str, dict]:
     return MODEL_ID, {}
 
 
-def create_embeddings(project_root: Path) -> Embeddings:
-    if os.getenv("BOOK_EMBEDDING_BACKEND", "sentence-transformers").lower() == "fastembed":
-        from langchain_community.embeddings import FastEmbedEmbeddings
+class FastEmbedModel:
+    """Small ONNX embedding adapter used by memory-constrained Render instances."""
 
-        return FastEmbedEmbeddings(
+    def __init__(self) -> None:
+        from fastembed import TextEmbedding
+
+        self.model = TextEmbedding(
             model_name=MODEL_ID,
             cache_dir=os.getenv("FASTEMBED_CACHE_PATH"),
-            threads=max(1, int(float(os.getenv("RENDER_CPU_COUNT", "1")))),
-            batch_size=32,
+            threads=max(1, int(os.getenv("FASTEMBED_THREADS", "1"))),
         )
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        batch_size = max(1, int(os.getenv("FASTEMBED_BATCH_SIZE", "8")))
+        return [vector.tolist() for vector in self.model.embed(texts, batch_size=batch_size)]
+
+    def embed_query(self, text: str) -> list[float]:
+        return next(self.model.query_embed(text)).tolist()
+
+
+def create_embeddings(project_root: Path):
+    if os.getenv("BOOK_EMBEDDING_BACKEND", "sentence-transformers").lower() == "fastembed":
+        return FastEmbedModel()
 
     from langchain_huggingface import HuggingFaceEmbeddings
 
@@ -103,38 +113,46 @@ def is_vector_db_current(project_root: Path) -> bool:
         return False
 
 
-def create_book_documents(source_file: Path) -> list[Document]:
-    """Create one Chroma document per ISBN-prefixed book description.
-
-    Some CSV descriptions contain embedded newlines, so a record continues until
-    the next line that begins with an ISBN.
-    """
-    documents = []
+def _read_book_records(source_file: Path) -> list[tuple[int, str]]:
+    """Parse ISBN-prefixed descriptions while preserving embedded newlines."""
+    records = []
     current_isbn = None
     current_lines = []
 
-    def add_current_document() -> None:
+    def add_current_record() -> None:
         if current_isbn is not None:
-            documents.append(Document(page_content="\n".join(current_lines), metadata={"isbn13": current_isbn}))
+            records.append((current_isbn, "\n".join(current_lines)))
 
     for line_number, line in enumerate(source_file.read_text(encoding="utf-8").splitlines(), start=1):
         line = line.strip()
         isbn, separator, _ = line.partition(" ")
         if separator and isbn.isdigit():
-            add_current_document()
+            add_current_record()
             current_isbn = int(isbn)
             current_lines = [line]
         elif current_isbn is None and line:
             raise ValueError(f"Invalid book description at line {line_number}: expected an ISBN prefix.")
         elif current_isbn is not None:
             current_lines.append(line)
-    add_current_document()
-    if not documents:
+    add_current_record()
+    if not records:
         raise ValueError(f"No book descriptions found in {source_file}")
-    return documents
+    return records
 
 
-def build_vector_db(project_root: Path, rebuild: bool = False, embeddings: Embeddings | None = None) -> Chroma:
+def create_book_documents(source_file: Path) -> list:
+    """Create one Chroma document per ISBN-prefixed book description."""
+    from langchain_core.documents import Document
+
+    return [
+        Document(page_content=description, metadata={"isbn13": isbn})
+        for isbn, description in _read_book_records(source_file)
+    ]
+
+
+def build_vector_db(project_root: Path, rebuild: bool = False, embeddings=None):
+    from langchain_chroma import Chroma
+
     source_file = project_root / "tagged_description.txt"
     output_dir = get_chroma_directory(project_root)
     if not source_file.exists():
@@ -164,3 +182,56 @@ def build_vector_db(project_root: Path, rebuild: bool = False, embeddings: Embed
     )
     print(f"Vector database built at {output_dir}")
     return Chroma(persist_directory=str(output_dir), embedding_function=embeddings)
+
+
+def _render_index_directory(project_root: Path) -> Path:
+    return Path(os.getenv("BOOK_VECTOR_INDEX_PATH", project_root / RENDER_INDEX_DIRECTORY)).expanduser()
+
+
+def build_render_vector_index(project_root: Path, rebuild: bool = False) -> Path:
+    """Build a compact NumPy index so Chroma is not loaded in Render's 512 MB runtime."""
+    import numpy as np
+
+    source_file = project_root / "tagged_description.txt"
+    output_dir = _render_index_directory(project_root)
+    vectors_path = output_dir / "vectors.npy"
+    isbns_path = output_dir / "isbns.npy"
+    manifest_path = output_dir / MANIFEST_NAME
+    expected_manifest = {
+        **_source_manifest(source_file),
+        "render_schema_version": RENDER_INDEX_SCHEMA_VERSION,
+        "model_id": MODEL_ID,
+    }
+    if not rebuild and vectors_path.is_file() and isbns_path.is_file() and manifest_path.is_file():
+        try:
+            if json.loads(manifest_path.read_text(encoding="utf-8")) == expected_manifest:
+                print("Render vector index is current.")
+                return output_dir
+        except (OSError, json.JSONDecodeError):
+            pass
+
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
+    output_dir.mkdir(parents=True)
+
+    records = _read_book_records(source_file)
+    embeddings = create_embeddings(project_root)
+    vectors = np.asarray(embeddings.embed_documents([description for _, description in records]), dtype=np.float32)
+    norms = np.linalg.norm(vectors, axis=1, keepdims=True)
+    vectors /= np.maximum(norms, np.finfo(np.float32).eps)
+    np.save(vectors_path, vectors)
+    np.save(isbns_path, np.asarray([isbn for isbn, _ in records], dtype=np.int64))
+    manifest_path.write_text(json.dumps(expected_manifest, ensure_ascii=False), encoding="utf-8")
+    print(f"Render vector index built at {output_dir}")
+    return output_dir
+
+
+def load_render_vector_index(project_root: Path):
+    """Memory-map the compact Render index instead of starting Chroma."""
+    import numpy as np
+
+    output_dir = _render_index_directory(project_root)
+    return (
+        np.load(output_dir / "vectors.npy", mmap_mode="r"),
+        np.load(output_dir / "isbns.npy", mmap_mode="r"),
+    )

@@ -4,12 +4,15 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-from langchain_chroma import Chroma
-from langchain_openai import ChatOpenAI
-
 import gradio as gr
 
-from vector_store import build_vector_db, create_embeddings, get_chroma_directory, is_vector_db_current
+from vector_store import (
+    build_vector_db,
+    create_embeddings,
+    get_chroma_directory,
+    is_vector_db_current,
+    load_render_vector_index,
+)
 
 load_dotenv()
 
@@ -30,12 +33,19 @@ books["large_thumbnail"] = np.where(
 embeddings = create_embeddings(BASE_DIR)
 
 # 注意：这里不是 from_documents，而是直接加载
-chroma_dir = get_chroma_directory(BASE_DIR)
-if is_vector_db_current(BASE_DIR):
-    db_books = Chroma(persist_directory=str(chroma_dir), embedding_function=embeddings)
+use_render_index = os.getenv("BOOK_EMBEDDING_BACKEND", "sentence-transformers").lower() == "fastembed"
+if use_render_index:
+    render_vectors, render_isbns = load_render_vector_index(BASE_DIR)
+    db_books = None
 else:
-    print("Vector database is missing or out of date. Rebuilding it...")
-    db_books = build_vector_db(BASE_DIR, rebuild=True, embeddings=embeddings)
+    from langchain_chroma import Chroma
+
+    chroma_dir = get_chroma_directory(BASE_DIR)
+    if is_vector_db_current(BASE_DIR):
+        db_books = Chroma(persist_directory=str(chroma_dir), embedding_function=embeddings)
+    else:
+        print("Vector database is missing or out of date. Rebuilding it...")
+        db_books = build_vector_db(BASE_DIR, rebuild=True, embeddings=embeddings)
 
 # --- 3. 配置 DeepSeek ---
 def build_llm():
@@ -43,12 +53,9 @@ def build_llm():
     if not api_key:
         return None
 
-    return ChatOpenAI(
-        model="deepseek-chat",
-        api_key=api_key,
-        base_url="https://api.deepseek.com",
-        temperature=0.7,
-    )
+    from openai import OpenAI
+
+    return OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
 
 
 llm = build_llm()
@@ -65,13 +72,22 @@ def retrieve_semantic_recommendations(
     tone = tone or "All"
 
     # 向量检索
-    recs = db_books.similarity_search(query, k=initial_top_k)
-    books_list = [
-        int(rec.metadata["isbn13"])
-        if "isbn13" in rec.metadata
-        else int(rec.page_content.split(maxsplit=1)[0])
-        for rec in recs
-    ]
+    if use_render_index:
+        query_vector = np.asarray(embeddings.embed_query(query), dtype=np.float32)
+        query_vector /= max(float(np.linalg.norm(query_vector)), np.finfo(np.float32).eps)
+        scores = render_vectors @ query_vector
+        result_count = min(initial_top_k, len(scores))
+        top_indices = np.argpartition(scores, -result_count)[-result_count:]
+        top_indices = top_indices[np.argsort(scores[top_indices])[::-1]]
+        books_list = render_isbns[top_indices].tolist()
+    else:
+        recs = db_books.similarity_search(query, k=initial_top_k)
+        books_list = [
+            int(rec.metadata["isbn13"])
+            if "isbn13" in rec.metadata
+            else int(rec.page_content.split(maxsplit=1)[0])
+            for rec in recs
+        ]
     book_recs = books.set_index("isbn13").reindex(books_list).dropna(how="all").reset_index()
 
     # 类别过滤
@@ -122,8 +138,12 @@ def recommend_books(query, category, tone):
         ai_comment = "已根据语义相似度返回推荐结果。配置 DEEPSEEK_API_KEY 后，可生成中文推荐理由。"
     else:
         try:
-            response = llm.invoke(prompt)
-            ai_comment = response.content
+            response = llm.chat.completions.create(
+                model="deepseek-chat",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+            )
+            ai_comment = response.choices[0].message.content
         except Exception as e:
             ai_comment = f"搜索完成。无法生成 AI 评论: {str(e)}"
 

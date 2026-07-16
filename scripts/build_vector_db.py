@@ -1,4 +1,5 @@
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -8,7 +9,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from vector_store import build_vector_db
+from vector_store import build_render_vector_index, build_vector_db
 
 
 def parse_args() -> argparse.Namespace:
@@ -19,4 +20,8 @@ def parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     load_dotenv()
-    build_vector_db(PROJECT_ROOT, rebuild=parse_args().rebuild)
+    args = parse_args()
+    if os.getenv("BOOK_EMBEDDING_BACKEND", "sentence-transformers").lower() == "fastembed":
+        build_render_vector_index(PROJECT_ROOT, rebuild=args.rebuild)
+    else:
+        build_vector_db(PROJECT_ROOT, rebuild=args.rebuild)
