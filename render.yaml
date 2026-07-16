@@ -4,7 +4,7 @@ services:
     runtime: python
     plan: free
     region: singapore
-    buildCommand: pip install -r requirements.txt && python scripts/build_vector_db.py
+    buildCommand: pip install torch==2.13.0+cpu --index-url https://download.pytorch.org/whl/cpu && pip install -r requirements.txt && python scripts/build_vector_db.py
     startCommand: python app.py
     autoDeployTrigger: commit
     envVars:
