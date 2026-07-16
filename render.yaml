@@ -4,7 +4,7 @@ services:
     runtime: python
     plan: free
     region: singapore
-    buildCommand: pip install torch==2.13.0+cpu --index-url https://download.pytorch.org/whl/cpu && pip install -r requirements.txt && python scripts/build_vector_db.py
+    buildCommand: pip install -r requirements-render.txt && python scripts/build_vector_db.py
     startCommand: python app.py
     autoDeployTrigger: commit
     envVars:
@@ -16,5 +16,9 @@ services:
         value: /opt/render/project/src/.cache/huggingface
       - key: BOOK_CHROMA_DB_PATH
         value: /opt/render/project/src/chroma_db
+      - key: BOOK_EMBEDDING_BACKEND
+        value: fastembed
+      - key: FASTEMBED_CACHE_PATH
+        value: /opt/render/project/src/.cache/fastembed
       - key: DEEPSEEK_API_KEY
         sync: false

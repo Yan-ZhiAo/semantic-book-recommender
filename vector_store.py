@@ -8,8 +8,8 @@ import tempfile
 from pathlib import Path
 
 from langchain_chroma import Chroma
+from langchain_core.embeddings import Embeddings
 from langchain_core.documents import Document
-from langchain_huggingface import HuggingFaceEmbeddings
 
 
 MODEL_ID = "BAAI/bge-small-en-v1.5"
@@ -45,7 +45,19 @@ def get_embedding_model_config(project_root: Path) -> tuple[str, dict]:
     return MODEL_ID, {}
 
 
-def create_embeddings(project_root: Path) -> HuggingFaceEmbeddings:
+def create_embeddings(project_root: Path) -> Embeddings:
+    if os.getenv("BOOK_EMBEDDING_BACKEND", "sentence-transformers").lower() == "fastembed":
+        from langchain_community.embeddings import FastEmbedEmbeddings
+
+        return FastEmbedEmbeddings(
+            model_name=MODEL_ID,
+            cache_dir=os.getenv("FASTEMBED_CACHE_PATH"),
+            threads=max(1, int(float(os.getenv("RENDER_CPU_COUNT", "1")))),
+            batch_size=32,
+        )
+
+    from langchain_huggingface import HuggingFaceEmbeddings
+
     model_name, model_kwargs = get_embedding_model_config(project_root)
     return HuggingFaceEmbeddings(model_name=model_name, model_kwargs=model_kwargs)
 
@@ -122,7 +134,7 @@ def create_book_documents(source_file: Path) -> list[Document]:
     return documents
 
 
-def build_vector_db(project_root: Path, rebuild: bool = False, embeddings: HuggingFaceEmbeddings | None = None) -> Chroma:
+def build_vector_db(project_root: Path, rebuild: bool = False, embeddings: Embeddings | None = None) -> Chroma:
     source_file = project_root / "tagged_description.txt"
     output_dir = get_chroma_directory(project_root)
     if not source_file.exists():
